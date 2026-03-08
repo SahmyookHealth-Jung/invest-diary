@@ -15,22 +15,34 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
 
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
 
-    const data = await res.json();
+      let data: { error?: string } = {};
+      try {
+        data = await res.json();
+      } catch {
+        setError("서버 응답을 읽을 수 없습니다. 잠시 후 다시 시도해주세요.");
+        setLoading(false);
+        return;
+      }
 
-    if (!res.ok) {
-      setError(data.error ?? "로그인에 실패했습니다");
+      if (!res.ok) {
+        setError(data.error ?? "로그인에 실패했습니다");
+        setLoading(false);
+        return;
+      }
+
+      router.push("/");
+      router.refresh();
+    } catch {
+      setError("네트워크 오류가 발생했습니다. 인터넷 연결을 확인해주세요.");
       setLoading(false);
-      return;
     }
-
-    router.push("/");
-    router.refresh();
   };
 
   return (
