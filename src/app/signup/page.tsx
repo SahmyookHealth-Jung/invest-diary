@@ -1,11 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 export default function SignupPage() {
-  const router = useRouter();
   const [form, setForm] = useState({
     nickname: "",
     phone_last4: "",
@@ -52,8 +50,7 @@ export default function SignupPage() {
         return;
       }
 
-      router.push("/");
-      router.refresh();
+      window.location.href = "/";
     } catch {
       setError("네트워크 오류가 발생했습니다. 인터넷 연결을 확인해주세요.");
       setLoading(false);
