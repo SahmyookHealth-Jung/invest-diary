@@ -50,7 +50,7 @@ export function setAuthCookies(
   res.cookies.set(COOKIE_AUTH, token, { ...opts, httpOnly: true });
   // 클라이언트에서 읽을 수 있게 httpOnly: false로 분리 저장
   res.cookies.set("user_id", userId, { ...opts, httpOnly: false });
-  res.cookies.set("user_nickname", encodeURIComponent(nickname), {
+  res.cookies.set("user_nickname", nickname, {
     ...opts,
     httpOnly: false,
   });

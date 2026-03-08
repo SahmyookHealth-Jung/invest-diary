@@ -10,7 +10,7 @@ export function getClientUser(): ClientUser | null {
   const nickname = getCookie("user_nickname");
 
   if (!userId || !nickname) return null;
-  return { userId, nickname: decodeURIComponent(nickname) };
+  return { userId, nickname };
 }
 
 function getCookie(name: string): string | null {
