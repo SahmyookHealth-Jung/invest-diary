@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { getClientUser } from "@/lib/clientAuth";
 import type { DailySettings } from "@/types/database";
 
 export default function SettingsPage() {
@@ -13,17 +14,26 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
 
   const fetchSettings = useCallback(async () => {
+    const user = getClientUser();
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     const { data } = await supabase
       .from("daily_settings")
       .select("*")
-      .eq("id", 1)
+      .eq("user_id", user.userId)
       .single();
 
     if (data) {
       setSettings(data);
       setTargetProfit(String(data.target_profit_rate));
       setStopLoss(String(data.stop_loss_rate));
+    } else {
+      setTargetProfit("3");
+      setStopLoss("-2");
     }
     setLoading(false);
   }, []);
@@ -33,17 +43,18 @@ export default function SettingsPage() {
   }, [fetchSettings]);
 
   const handleSave = async () => {
+    const user = getClientUser();
+    if (!user) return;
+
     setSaving(true);
     setSaved(false);
 
-    const { error } = await supabase
-      .from("daily_settings")
-      .upsert({
-        id: 1,
-        target_profit_rate: parseFloat(targetProfit),
-        stop_loss_rate: parseFloat(stopLoss),
-        updated_at: new Date().toISOString(),
-      });
+    const { error } = await supabase.from("daily_settings").upsert({
+      user_id: user.userId,
+      target_profit_rate: parseFloat(targetProfit),
+      stop_loss_rate: parseFloat(stopLoss),
+      updated_at: new Date().toISOString(),
+    });
 
     if (!error) {
       setSaved(true);
@@ -121,7 +132,6 @@ export default function SettingsPage() {
         )}
       </div>
 
-      {/* 현재 설정 요약 */}
       <div className="rounded-2xl bg-zinc-900 p-4">
         <h2 className="text-lg font-semibold mb-3">현재 설정 요약</h2>
         <div className="grid grid-cols-2 gap-3">
@@ -133,9 +143,7 @@ export default function SettingsPage() {
           </div>
           <div className="rounded-xl bg-red-500/10 p-3 text-center">
             <p className="text-xs text-zinc-400">손절 기준</p>
-            <p className="text-xl font-bold text-red-400">
-              {stopLoss || "0"}%
-            </p>
+            <p className="text-xl font-bold text-red-400">{stopLoss || "0"}%</p>
           </div>
         </div>
       </div>

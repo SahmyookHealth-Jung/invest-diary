@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import BottomNav from "@/components/BottomNav";
+import AppHeader from "@/components/AppHeader";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -29,6 +30,7 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <body className="min-h-screen bg-zinc-950 text-zinc-50 antialiased">
+        <AppHeader />
         <main className="mx-auto max-w-lg pb-20 pt-2 px-4">
           {children}
         </main>

@@ -31,7 +31,7 @@ export interface Holding {
 }
 
 export interface DailySettings {
-  id: number;
+  user_id: string;
   target_profit_rate: number;
   stop_loss_rate: number;
   updated_at: string;

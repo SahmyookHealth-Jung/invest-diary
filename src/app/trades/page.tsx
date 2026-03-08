@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { getClientUser } from "@/lib/clientAuth";
 import TickerInput from "@/components/TickerInput";
 import type { Trade, Ticker } from "@/types/database";
 import { STRATEGY_LABELS, type Strategy } from "@/types/database";
@@ -30,12 +31,20 @@ export default function TradesPage() {
   const [submitting, setSubmitting] = useState(false);
   const [resolvedTicker, setResolvedTicker] = useState<Ticker | null>(null);
   const [loading, setLoading] = useState(true);
+  const [formError, setFormError] = useState("");
 
   const fetchTrades = useCallback(async () => {
+    const user = getClientUser();
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     const { data } = await supabase
       .from("trades")
       .select("*")
+      .eq("user_id", user.userId)
       .order("trade_date", { ascending: false })
       .limit(50);
     setTrades(data ?? []);
@@ -45,8 +54,6 @@ export default function TradesPage() {
   useEffect(() => {
     fetchTrades();
   }, [fetchTrades]);
-
-  const [formError, setFormError] = useState("");
 
   const resolveTicker = async (symbol: string): Promise<Ticker | null> => {
     const trimmed = symbol.trim().toUpperCase();
@@ -68,8 +75,10 @@ export default function TradesPage() {
     e.preventDefault();
     setFormError("");
 
-    let ticker = resolvedTicker;
+    const user = getClientUser();
+    if (!user) return;
 
+    let ticker = resolvedTicker;
     if (!ticker && form.symbol.trim()) {
       setSubmitting(true);
       ticker = await resolveTicker(form.symbol);
@@ -84,6 +93,7 @@ export default function TradesPage() {
 
     setSubmitting(true);
     const { error } = await supabase.from("trades").insert({
+      user_id: user.userId,
       symbol: ticker.symbol,
       entry_price: parseFloat(form.entry_price),
       exit_price: parseFloat(form.exit_price),
@@ -122,12 +132,8 @@ export default function TradesPage() {
         </button>
       </div>
 
-      {/* 입력 폼 */}
       {showForm && (
-        <form
-          onSubmit={handleSubmit}
-          className="space-y-3 rounded-2xl bg-zinc-900 p-4"
-        >
+        <form onSubmit={handleSubmit} className="space-y-3 rounded-2xl bg-zinc-900 p-4">
           <TickerInput
             value={form.symbol}
             onChange={(v) => setForm({ ...form, symbol: v })}
@@ -139,44 +145,32 @@ export default function TradesPage() {
 
           {resolvedTicker && (
             <div className="rounded-lg bg-zinc-800 px-3 py-2 text-xs text-zinc-400">
-              <span className="font-semibold text-emerald-400">
-                {resolvedTicker.company_name}
-              </span>
-              {resolvedTicker.sector && (
-                <span className="ml-2">· {resolvedTicker.sector}</span>
-              )}
+              <span className="font-semibold text-emerald-400">{resolvedTicker.company_name}</span>
+              {resolvedTicker.sector && <span className="ml-2">· {resolvedTicker.sector}</span>}
             </div>
           )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-1">
-                진입가 ($)
-              </label>
+              <label className="block text-sm font-medium text-zinc-400 mb-1">진입가 ($)</label>
               <input
                 type="number"
                 step="0.01"
                 required
                 value={form.entry_price}
-                onChange={(e) =>
-                  setForm({ ...form, entry_price: e.target.value })
-                }
+                onChange={(e) => setForm({ ...form, entry_price: e.target.value })}
                 placeholder="0.00"
                 className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2.5 text-white placeholder-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-1">
-                청산가 ($)
-              </label>
+              <label className="block text-sm font-medium text-zinc-400 mb-1">청산가 ($)</label>
               <input
                 type="number"
                 step="0.01"
                 required
                 value={form.exit_price}
-                onChange={(e) =>
-                  setForm({ ...form, exit_price: e.target.value })
-                }
+                onChange={(e) => setForm({ ...form, exit_price: e.target.value })}
                 placeholder="0.00"
                 className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2.5 text-white placeholder-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
               />
@@ -184,9 +178,7 @@ export default function TradesPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-zinc-400 mb-1">
-              수량 (주)
-            </label>
+            <label className="block text-sm font-medium text-zinc-400 mb-1">수량 (주)</label>
             <input
               type="number"
               required
@@ -199,30 +191,20 @@ export default function TradesPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-zinc-400 mb-1">
-              매매 전략
-            </label>
+            <label className="block text-sm font-medium text-zinc-400 mb-1">매매 전략</label>
             <select
               value={form.strategy}
-              onChange={(e) =>
-                setForm({ ...form, strategy: e.target.value as Strategy })
-              }
+              onChange={(e) => setForm({ ...form, strategy: e.target.value as Strategy })}
               className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2.5 text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
             >
-              {(Object.entries(STRATEGY_LABELS) as [Strategy, string][]).map(
-                ([key, label]) => (
-                  <option key={key} value={key}>
-                    {label}
-                  </option>
-                )
-              )}
+              {(Object.entries(STRATEGY_LABELS) as [Strategy, string][]).map(([key, label]) => (
+                <option key={key} value={key}>{label}</option>
+              ))}
             </select>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-zinc-400 mb-1">
-              메모
-            </label>
+            <label className="block text-sm font-medium text-zinc-400 mb-1">메모</label>
             <textarea
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
@@ -236,22 +218,11 @@ export default function TradesPage() {
             <div className="rounded-lg bg-zinc-800 p-3">
               <p className="text-xs text-zinc-500">예상 손익</p>
               {(() => {
-                const pnl =
-                  (parseFloat(form.exit_price) - parseFloat(form.entry_price)) *
-                  parseInt(form.quantity);
-                const rate =
-                  ((parseFloat(form.exit_price) -
-                    parseFloat(form.entry_price)) /
-                    parseFloat(form.entry_price)) *
-                  100;
+                const pnl = (parseFloat(form.exit_price) - parseFloat(form.entry_price)) * parseInt(form.quantity);
+                const rate = ((parseFloat(form.exit_price) - parseFloat(form.entry_price)) / parseFloat(form.entry_price)) * 100;
                 return (
-                  <p
-                    className={`text-lg font-bold ${
-                      pnl >= 0 ? "text-profit" : "text-loss"
-                    }`}
-                  >
-                    {formatCurrency(pnl)} ({rate >= 0 ? "+" : ""}
-                    {rate.toFixed(2)}%)
+                  <p className={`text-lg font-bold ${pnl >= 0 ? "text-profit" : "text-loss"}`}>
+                    {formatCurrency(pnl)} ({rate >= 0 ? "+" : ""}{rate.toFixed(2)}%)
                   </p>
                 );
               })()}
@@ -259,9 +230,7 @@ export default function TradesPage() {
           )}
 
           {formError && (
-            <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">
-              {formError}
-            </p>
+            <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">{formError}</p>
           )}
 
           <button
@@ -274,7 +243,6 @@ export default function TradesPage() {
         </form>
       )}
 
-      {/* 매매 기록 목록 */}
       {loading ? (
         <div className="flex justify-center py-12">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-400 border-t-transparent" />
@@ -286,52 +254,29 @@ export default function TradesPage() {
       ) : (
         <ul className="space-y-2">
           {trades.map((trade) => {
-            const pnl =
-              (trade.exit_price - trade.entry_price) * trade.quantity;
-            const rate =
-              ((trade.exit_price - trade.entry_price) / trade.entry_price) *
-              100;
+            const pnl = (trade.exit_price - trade.entry_price) * trade.quantity;
+            const rate = ((trade.exit_price - trade.entry_price) / trade.entry_price) * 100;
             return (
-              <li
-                key={trade.id}
-                className="rounded-xl bg-zinc-900 p-3"
-              >
+              <li key={trade.id} className="rounded-xl bg-zinc-900 p-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <span className="font-mono font-bold text-emerald-400">
-                      {trade.symbol}
-                    </span>
-                    <span className="ml-2 text-xs text-zinc-500">
-                      x{trade.quantity}
-                    </span>
+                    <span className="font-mono font-bold text-emerald-400">{trade.symbol}</span>
+                    <span className="ml-2 text-xs text-zinc-500">x{trade.quantity}</span>
                     <span className="ml-2 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400">
-                      {STRATEGY_LABELS[trade.strategy as Strategy] ??
-                        trade.strategy}
+                      {STRATEGY_LABELS[trade.strategy as Strategy] ?? trade.strategy}
                     </span>
                   </div>
                   <div className="text-right">
-                    <p
-                      className={`font-bold ${
-                        pnl >= 0 ? "text-profit" : "text-loss"
-                      }`}
-                    >
+                    <p className={`font-bold ${pnl >= 0 ? "text-profit" : "text-loss"}`}>
                       {formatCurrency(pnl)}
                     </p>
-                    <p
-                      className={`text-xs ${
-                        rate >= 0 ? "text-profit" : "text-loss"
-                      }`}
-                    >
-                      {rate >= 0 ? "+" : ""}
-                      {rate.toFixed(2)}%
+                    <p className={`text-xs ${rate >= 0 ? "text-profit" : "text-loss"}`}>
+                      {rate >= 0 ? "+" : ""}{rate.toFixed(2)}%
                     </p>
                   </div>
                 </div>
                 <div className="mt-1 flex items-center justify-between text-xs text-zinc-500">
-                  <span>
-                    {formatCurrency(trade.entry_price)} →{" "}
-                    {formatCurrency(trade.exit_price)}
-                  </span>
+                  <span>{formatCurrency(trade.entry_price)} → {formatCurrency(trade.exit_price)}</span>
                   <span>
                     {new Date(trade.trade_date).toLocaleDateString("ko-KR", {
                       month: "short",
@@ -340,9 +285,7 @@ export default function TradesPage() {
                   </span>
                 </div>
                 {trade.notes && (
-                  <p className="mt-1 text-xs text-zinc-400 line-clamp-2">
-                    {trade.notes}
-                  </p>
+                  <p className="mt-1 text-xs text-zinc-400 line-clamp-2">{trade.notes}</p>
                 )}
                 <button
                   onClick={() => handleDelete(trade.id)}

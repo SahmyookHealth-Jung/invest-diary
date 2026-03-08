@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { getClientUser } from "@/lib/clientAuth";
 import type { Trade, DailySettings } from "@/types/database";
 
 function formatCurrency(value: number): string {
@@ -23,6 +24,12 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
+    const user = getClientUser();
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
 
     const todayStart = new Date();
@@ -34,10 +41,15 @@ export default function DashboardPage() {
       supabase
         .from("trades")
         .select("*")
+        .eq("user_id", user.userId)
         .gte("trade_date", todayStart.toISOString())
         .lte("trade_date", todayEnd.toISOString())
         .order("created_at", { ascending: false }),
-      supabase.from("daily_settings").select("*").eq("id", 1).single(),
+      supabase
+        .from("daily_settings")
+        .select("*")
+        .eq("user_id", user.userId)
+        .single(),
     ]);
 
     setTodayTrades(tradesRes.data ?? []);
@@ -57,7 +69,8 @@ export default function DashboardPage() {
     return sum + t.entry_price * t.quantity;
   }, 0);
 
-  const dailyReturnRate = totalInvested > 0 ? (totalPnL / totalInvested) * 100 : 0;
+  const dailyReturnRate =
+    totalInvested > 0 ? (totalPnL / totalInvested) * 100 : 0;
 
   const targetReached =
     settings && dailyReturnRate >= settings.target_profit_rate;
@@ -95,7 +108,6 @@ export default function DashboardPage() {
         })}
       </p>
 
-      {/* 알림 배너 */}
       {targetReached && (
         <div className="animate-alert-pulse rounded-xl border-2 border-emerald-400 bg-emerald-400/10 p-4 text-center">
           <p className="text-lg font-bold text-emerald-400">
@@ -119,30 +131,16 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* 수익 요약 카드 */}
-      <div
-        className={`rounded-2xl p-5 ${
-          totalPnL >= 0 ? "bg-profit" : "bg-loss"
-        }`}
-      >
+      <div className={`rounded-2xl p-5 ${totalPnL >= 0 ? "bg-profit" : "bg-loss"}`}>
         <p className="text-sm text-zinc-400">오늘의 총 손익</p>
-        <p
-          className={`text-3xl font-bold mt-1 ${
-            totalPnL >= 0 ? "text-profit" : "text-loss"
-          }`}
-        >
+        <p className={`text-3xl font-bold mt-1 ${totalPnL >= 0 ? "text-profit" : "text-loss"}`}>
           {formatCurrency(totalPnL)}
         </p>
-        <p
-          className={`text-lg font-medium ${
-            dailyReturnRate >= 0 ? "text-profit" : "text-loss"
-          }`}
-        >
+        <p className={`text-lg font-medium ${dailyReturnRate >= 0 ? "text-profit" : "text-loss"}`}>
           {formatPercent(dailyReturnRate)}
         </p>
       </div>
 
-      {/* 통계 그리드 */}
       <div className="grid grid-cols-3 gap-3">
         <div className="rounded-xl bg-zinc-900 p-3 text-center">
           <p className="text-xs text-zinc-500">총 거래</p>
@@ -162,57 +160,35 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 오늘의 매매 목록 */}
       <div>
         <h2 className="text-lg font-semibold mb-2">오늘의 매매</h2>
         {todayTrades.length === 0 ? (
           <div className="rounded-xl bg-zinc-900 p-8 text-center">
             <p className="text-zinc-500">아직 오늘의 매매 기록이 없습니다</p>
-            <a
-              href="/trades"
-              className="mt-3 inline-block text-sm font-medium text-emerald-400"
-            >
+            <a href="/trades" className="mt-3 inline-block text-sm font-medium text-emerald-400">
               매매 기록 추가하기 →
             </a>
           </div>
         ) : (
           <ul className="space-y-2">
             {todayTrades.map((trade) => {
-              const pnl =
-                (trade.exit_price - trade.entry_price) * trade.quantity;
+              const pnl = (trade.exit_price - trade.entry_price) * trade.quantity;
               const pnlRate =
-                ((trade.exit_price - trade.entry_price) / trade.entry_price) *
-                100;
+                ((trade.exit_price - trade.entry_price) / trade.entry_price) * 100;
               return (
-                <li
-                  key={trade.id}
-                  className="flex items-center justify-between rounded-xl bg-zinc-900 p-3"
-                >
+                <li key={trade.id} className="flex items-center justify-between rounded-xl bg-zinc-900 p-3">
                   <div>
-                    <span className="font-mono font-bold text-emerald-400">
-                      {trade.symbol}
-                    </span>
-                    <span className="ml-2 text-xs text-zinc-500">
-                      x{trade.quantity}
-                    </span>
+                    <span className="font-mono font-bold text-emerald-400">{trade.symbol}</span>
+                    <span className="ml-2 text-xs text-zinc-500">x{trade.quantity}</span>
                     <p className="text-xs text-zinc-500 mt-0.5">
-                      {formatCurrency(trade.entry_price)} →{" "}
-                      {formatCurrency(trade.exit_price)}
+                      {formatCurrency(trade.entry_price)} → {formatCurrency(trade.exit_price)}
                     </p>
                   </div>
                   <div className="text-right">
-                    <p
-                      className={`font-bold ${
-                        pnl >= 0 ? "text-profit" : "text-loss"
-                      }`}
-                    >
+                    <p className={`font-bold ${pnl >= 0 ? "text-profit" : "text-loss"}`}>
                       {formatCurrency(pnl)}
                     </p>
-                    <p
-                      className={`text-xs ${
-                        pnlRate >= 0 ? "text-profit" : "text-loss"
-                      }`}
-                    >
+                    <p className={`text-xs ${pnlRate >= 0 ? "text-profit" : "text-loss"}`}>
                       {formatPercent(pnlRate)}
                     </p>
                   </div>
